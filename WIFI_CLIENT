@@ -1,0 +1,524 @@
+//-- Libraries Included --------------------------------------------------------------
+  #include <FastLED.h>
+  #include <ESP8266WiFi.h>
+  #include <ESP8266WiFiMulti.h>
+//------------------------------------------------------------------------------------
+// Defining I/O Pins
+//------------------------------------------------------------------------------------
+  #define       SW1      D1         // Switch 1
+  #define       SW2      D2         // Switch 2
+  #define       PB1      D3         // Push_Button 1
+  #define       D_out    D0
+  #define       A_out    A0
+//------------------------------------------------------------------------------------
+// LED Variables
+//------------------------------------------------------------------------------------
+  #define NUM_LEDS 90
+  CRGB leds[NUM_LEDS];
+  int cmd;
+  int choice = 0;
+  int Dout = digitalRead(D_out);
+  int Aout = digitalRead(A_out);
+//------------------------------------------------------------------------------------
+// WIFI Authentication Variables
+//------------------------------------------------------------------------------------
+  #ifndef CLIENTssid
+  #define CLIENTssid      "LED_WiFi"
+  #define CLIENTpassword  "Lettherebelight"
+  #endif
+  const char* ssid       = CLIENTssid;
+  const char* password   = CLIENTpassword;
+  const char* host = "192.168.4.1";
+  const uint16_t port = 80;
+  ESP8266WiFiMulti WiFiMulti;       // WIFI multi client
+//====================================================================================
+  void setup() 
+  {
+    // Setting The Serial Port ----------------------------------------------
+    Serial.begin(115200);           // Computer Communication
+    
+    // Setting The Mode Of Pins ---------------------------------------------
+    pinMode(SW1, INPUT_PULLUP);     // Switch to change functions
+    pinMode(SW2, INPUT_PULLUP);     // Switch to change functions
+    pinMode(PB1, INPUT_PULLUP);     // Push button to change visualizations/LED bulbs
+    pinMode(LED_BUILTIN, OUTPUT);   // Builtin LED on the Wemos D1 mini
+    
+    // Print Message Of I/O Setting Progress --------------------------------
+    Serial.println("\nI/O Pins Modes Set .... Done");
+
+    // Starting To Connect --------------------------------------------------
+    WiFi.mode(WIFI_STA);            // To Avoid Broadcasting An SSID
+    WiFiMulti.addAP(ssid, password);
+    
+    // Printing Message For User That Connetion Is On Process ---------------
+    Serial.println("!--- Connecting To " + WiFi.SSID() + " ---!");
+
+    // WiFi Connectivity ----------------------------------------------------
+    CheckConnectivity();            // Checking For Connection
+
+    // Stop Blinking To Indicate Connected ----------------------------------
+    digitalWrite(LED_BUILTIN, !HIGH);
+    Serial.println("!-- Client Device Connected --!");
+
+    // Printing IP Address --------------------------------------------------
+    Serial.println("Connected To      : " + String(WiFi.SSID()));
+    Serial.print  ("Device IP Address : ");
+    Serial.println(WiFi.localIP());
+  }
+//====================================================================================
+  void loop()
+  {
+      Read_Switches();
+  }
+//====================================================================================
+
+  void Read_Switches()
+  { 
+    // Establish that this is a client -----------------------------------------   
+    WiFiClient client; 
+    
+    // Reading The Switches & Buttons ------------------------------------------
+    int switch1 = digitalRead(SW1);
+    int switch2 = digitalRead(SW2);
+    int button1 = digitalRead(PB1);
+
+    // 1st function (LED_COLOURS) ----------------------------------------------
+    if(switch1 == LOW && switch2 == LOW){
+      cmd = 0;
+
+    // When push button is pushed ----------------------------------------------
+      if(button1 == HIGH){
+        delay(50);
+        button1 = digitalRead(PB1);
+        
+    // When push button is released --------------------------------------------    
+        if(button1 == LOW){
+          choice++;
+          if(choice > 3){
+            choice = 0;
+          }
+      SendtoServer_choice();
+        }
+      }
+      SendtoServer();
+    }
+    
+    // 2nd function (LED_PATTERNS) ----------------------------------------------
+    else if(switch1 == LOW && switch2 == HIGH){
+      cmd = 1;
+      if(button1 == HIGH){
+        delay(50);
+        button1 = digitalRead(PB1);
+        if(button1 == LOW){
+          choice++;
+          if(choice > 3){
+            choice = 0;
+          }       
+        }
+      }
+      SendtoServer();
+      SendtoServer_choice();
+    }
+
+    // 3rd function (Digital Visualization) --------------------------------------
+    else if(switch1 == HIGH && switch2 == LOW){
+      cmd = 2;
+
+    // When push button is pushed ------------------------------------------------
+      if(button1 == HIGH){
+        delay(50);
+        button1 = digitalRead(PB1);
+
+    // When push button is released ----------------------------------------------
+        if(button1 == LOW){
+          choice++;
+          if(choice > 2){
+            choice = 0;
+          }
+    // Send data to sever, then stop sending for 1 second ------------------------
+      SendtoServer_choice();
+      client.stop();
+      delay(1000);
+        }
+      }
+      if(choice == 0){
+        SendtoServer();
+      }
+      if(choice == 1){
+        SendtoServer();
+        SendtoServer_Dout_1();
+      }
+      else if(choice == 2){
+        SendtoServer();
+        SendtoServer_Dout_2();
+      }
+     }
+     
+    // 4th function (Analog Visualization) --------------------------------------
+    else if(switch1 == HIGH && switch2 == HIGH){
+      cmd = 3;
+      if(button1 == HIGH){
+        delay(50);
+        button1 = digitalRead(PB1);
+        if(button1 == LOW){
+          choice++;
+          if(choice > 2){
+            choice = 0;
+          }
+      SendtoServer_choice();
+      client.stop();
+      delay(1000);
+        }
+      }
+      if(choice == 0){
+        SendtoServer();
+      }
+      if(choice == 1){
+        SendtoServer();
+        SendtoServer_Aout_1();
+      }
+      else if(choice == 2){
+        SendtoServer();
+        SendtoServer_Aout_2();
+      }
+    }
+  }
+
+//====================================================================================
+
+  void CheckConnectivity()
+  {
+    while(WiFiMulti.run() != WL_CONNECTED)
+    {
+      for(int i=0; i < 10; i++)
+      {
+        digitalWrite(LED_BUILTIN, !HIGH);
+        delay(250);
+        digitalWrite(LED_BUILTIN, !LOW);
+        delay(250);
+        Serial.print(".");
+      }
+      Serial.println("");
+    }
+  }
+
+//====================================================================================
+void SendtoServer()
+{
+// Convert cmd into a character variable -----------------------------------
+  char char_cmd[5];
+  itoa(cmd, char_cmd, 10);  
+    
+// Prints the connection details and value of cmd --------------------------
+  Serial.print("connecting to ");
+  Serial.print(host);
+  Serial.print(':');
+  Serial.println(port);
+  Serial.print("cmd: ");
+  Serial.println(char_cmd);
+  
+// Establish that this is a client -----------------------------------------
+  WiFiClient client;
+  
+// If it fails to connect to the server ------------------------------------
+  if (!client.connect(host, port)) {
+    Serial.println("connection failed");
+    Serial.println("wait 1 sec...");
+    delay(500);
+    return;
+  }
+// Setting The Request String ----------------------------------------------
+  String url = "/data/";    
+  url += "?sensor_reading=";
+  url += char_cmd;            
+  
+// This will send the request to the server --------------------------------
+  client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+               "Host: " + host + "\r\n" +
+               "Connection: close\r\n\r\n");
+               
+// If it loses connection with the server ----------------------------------
+  unsigned long timeout = millis();
+  while (client.available() == 0) {
+    if (millis() - timeout > 500) {
+      Serial.println(">>> Client Timeout !");
+      client.stop();
+      return;
+    }
+  }
+}
+//====================================================================================
+
+void SendtoServer_choice()
+{
+  char char_choice[5];
+  itoa(choice, char_choice, 10);
+
+  Serial.print("connecting to ");
+  Serial.print(host);
+  Serial.print(':');
+  Serial.println(port);
+  Serial.print("choice: ");
+  Serial.println(char_choice);
+
+  WiFiClient client;
+
+  if (!client.connect(host, port)) {
+    Serial.println("connection failed");
+    Serial.println("wait 1 sec...");
+    delay(500);
+    return;
+  }
+  
+  String url_choice = "/choice/";
+  url_choice += "?choice_reading=";
+  url_choice += char_choice;
+  
+  client.print(String("GET ") + url_choice + " HTTP/1.1\r\n" +
+               "Host: " + host + "\r\n" +
+               "Connection: close\r\n\r\n");
+
+  unsigned long timeout = millis();
+  while (client.available() == 0) {
+    if (millis() - timeout > 500) {
+      Serial.println(">>> Client Timeout !");
+      client.stop();
+      return;
+    }
+  }
+}
+
+//====================================================================================
+
+void SendtoServer_Dout_1()
+{
+  Dout = digitalRead(D_out);
+  char char_Dout[5];
+  itoa(Dout, char_Dout, 10);
+
+  Serial.print("connecting to ");
+  Serial.print(host);
+  Serial.print(':');
+  Serial.println(port);
+  Serial.print("Dout: ");
+  Serial.println(Dout);
+
+  WiFiClient client;
+
+  if (!client.connect(host, port)) {
+    Serial.println("connection failed");
+    Serial.println("wait 1 sec...");
+    delay(500);
+    return;
+  }
+
+  String url_Dout = "/Dout_1/";
+  url_Dout += "?Dout_reading_1=";
+  url_Dout += char_Dout;
+  
+   // This will send the request to the server
+  client.print(String("GET ") + url_Dout + " HTTP/1.1\r\n" +
+               "Host: " + host + "\r\n" +
+               "Connection: close\r\n\r\n");
+
+  unsigned long timeout = millis();
+  while (client.available() == 0) {
+    if (millis() - timeout > 500) {
+      Serial.println(">>> Client Timeout !");
+      client.stop();
+      return;
+    }
+  }
+}
+
+//====================================================================================
+
+void SendtoServer_Dout_2()
+{
+  Dout = digitalRead(D_out);
+  char char_Dout[5];
+  itoa(Dout, char_Dout, 10);
+
+  Serial.print("connecting to ");
+  Serial.print(host);
+  Serial.print(':');
+  Serial.println(port);
+  Serial.print("Dout: ");
+  Serial.println(Dout);
+
+  WiFiClient client;
+
+  if (!client.connect(host, port)) {
+    Serial.println("connection failed");
+    Serial.println("wait 1 sec...");
+    delay(500);
+    return;
+  }
+
+  String url_Dout = "/Dout_2/";
+  url_Dout += "?Dout_reading_2=";
+  url_Dout += char_Dout;
+  
+   // This will send the request to the server
+  client.print(String("GET ") + url_Dout + " HTTP/1.1\r\n" +
+               "Host: " + host + "\r\n" +
+               "Connection: close\r\n\r\n");
+
+  unsigned long timeout = millis();
+  while (client.available() == 0) {
+    if (millis() - timeout > 500) {
+      Serial.println(">>> Client Timeout !");
+      client.stop();
+      return;
+    }
+  }
+}
+
+//====================================================================================
+
+void SendtoServer_Aout_1()
+{
+  Aout = analogRead(A_out);
+  char char_Aout[5];
+  itoa(Aout, char_Aout, 10);
+
+  Serial.print("connecting to ");
+  Serial.print(host);
+  Serial.print(':');
+  Serial.println(port);
+  Serial.print("Aout: ");
+  Serial.println(Aout);
+
+  WiFiClient client;
+
+  if (!client.connect(host, port)) {
+    Serial.println("connection failed");
+    Serial.println("wait 1 sec...");
+    delay(500);
+    return;
+  }
+
+  String url_Aout = "/Aout_1/";
+  url_Aout += "?Aout_reading_1=";
+  url_Aout += char_Aout;
+  
+   // This will send the request to the server
+  client.print(String("GET ") + url_Aout + " HTTP/1.1\r\n" +
+               "Host: " + host + "\r\n" +
+               "Connection: close\r\n\r\n");
+
+  unsigned long timeout = millis();
+  while (client.available() == 0) {
+    if (millis() - timeout > 500) {
+      Serial.println(">>> Client Timeout !");
+      client.stop();
+      return;
+    }
+  }
+}
+
+//====================================================================================
+
+
+void SendtoServer_Aout_2()
+{
+  Aout = analogRead(A_out);
+  char char_Aout[5];
+  itoa(Aout, char_Aout, 10);
+
+  Serial.print("connecting to ");
+  Serial.print(host);
+  Serial.print(':');
+  Serial.println(port);
+  Serial.print("Aout: ");
+  Serial.println(Aout);
+
+  WiFiClient client;
+
+  if (!client.connect(host, port)) {
+    Serial.println("connection failed");
+    Serial.println("wait 1 sec...");
+    delay(500);
+    return;
+  }
+
+  String url_Aout = "/Aout_2/";
+  url_Aout += "?Aout_reading_2=";
+  url_Aout += char_Aout;
+  
+   // This will send the request to the server
+  client.print(String("GET ") + url_Aout + " HTTP/1.1\r\n" +
+               "Host: " + host + "\r\n" +
+               "Connection: close\r\n\r\n");
+
+  unsigned long timeout = millis();
+  while (client.available() == 0) {
+    if (millis() - timeout > 500) {
+      Serial.println(">>> Client Timeout !");
+      client.stop();
+      return;
+    }
+  }
+}
+
+//====================================================================================
+/*
+  void Read_Switches()
+  {
+// Reading The Switches & Buttons -----------------------------------
+    int switch1 = digitalRead(SW1);
+    int switch2 = digitalRead(SW2);
+    int button1 = digitalRead(PB1);
+    if(switch1 == LOW && switch2 == LOW){
+      cmd = 0;
+// When the pushbutton is pressed -----------------------------------
+      if(button1 == HIGH){
+        delay(50);
+        button1 = digitalRead(PB1);
+        if(button1 == LOW){
+          choice++;
+          if(choice > 3){
+            choice = 0;
+          }
+      SendtoServer_choice();
+        }
+      }
+// SendtoServer cmd & Dout ------------------------------------------
+      SendtoServer();
+      SendtoServer_Dout();
+    }
+    
+    else if(switch1 == LOW && switch2 == HIGH){
+      cmd = 1;
+// When the pushbutton is pressed -----------------------------------
+      if(button1 == HIGH){
+        delay(50);
+        button1 = digitalRead(PB1);
+        if(button1 == LOW){
+          choice++;
+          if(choice > 3){
+            choice = 0;
+          }
+      SendtoServer_choice();
+        }
+      }
+// SendtoServer cmd and Aout ----------------------------------------
+      SendtoServer();
+      SendtoServer_Aout();
+    }
+//====================================================================================
+
+
+
+    }
+    else if(switch1 == HIGH && switch2 == LOW){
+      cmd = 2;
+      SendtoServer();
+    }
+    else if(switch1 == HIGH && switch2 == HIGH){
+      cmd = 3;
+      SendtoServer();
+    }
+  }
+//====================================================================================
+*/

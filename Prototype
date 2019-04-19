@@ -1,0 +1,1053 @@
+//------------------------------------------------------------------------------------
+// FHT Definitions
+//------------------------------------------------------------------------------------
+#define qsubd(x, b) ((x>b)?b:0)                               // A digital unsigned subtraction macro. if result <0, then => 0. Otherwise, take on fixed value.
+#define qsuba(x, b) ((x>b)?x-b:0)                             // Unsigned subtraction macro. if result <0, then => 0.
+#define LOG_OUT 1                                             // Use logarithmic based bins (is required for the library to run).
+#define FHT_N 256                                             // Set to 256 point fht. Any less, and the upper ranges won't work well.
+#define DC_OFFSET  509                                        // DC offset in mic signal. Should probably be about 512.
+
+//------------------------------------------------------------------------------------
+// Libraries Included
+//------------------------------------------------------------------------------------
+#include <FHT.h>                                              // FHT library at http://wiki.openmusiclabs.com/wiki/ArduinoFHT
+#include <FastLED.h>                                          // FastLED library at https://github.com/FastLED/FastLED
+
+//------------------------------------------------------------------------------------
+// LED Variables
+//------------------------------------------------------------------------------------
+#define LED_PIN1 7                                            // Data pin to connect to the strip.
+#define NUM_LEDS 90                                           // Number of LED's.
+uint8_t max_bright = 128;                                     // Overall brightness definition. It can be changed on the fly.
+struct CRGB leds[NUM_LEDS];                                   // Initialize our LED array.
+int gHue = 0;
+
+//------------------------------------------------------------------------------------
+// Push Button Variables
+//------------------------------------------------------------------------------------
+int num = 0;
+int old = 0;
+int n = 0;
+int o = 0;
+
+//------------------------------------------------------------------------------------
+// Mic/Aux Input Variables
+//------------------------------------------------------------------------------------
+#define volume_mic 700
+#define volume 40
+int UPDATE_LEDS = 4;
+int REMOVE_LEDS = 4;
+int MIDDLE_LED = 45;
+int MIDDLE_LED_L = 60;
+int MIDDLE_LED_R = 15;
+int LEDS_LEVEL;
+int LEDS_LEVEL_L;
+int LEDS_LEVEL_R;
+long lastrefreshtime;
+
+//====================================================================================
+void setup() {
+  
+  Serial.begin(9600);                                        // Initialize serial port for debugging.
+  FastLED.addLeds<WS2812, LED_PIN1, GRB>(leds,NUM_LEDS);
+  FastLED.setBrightness(max_bright);
+  pinMode(9, INPUT);  // take digital input from pin 9
+  pinMode(10, INPUT); // take digital input from pin 10
+  pinMode(11, INPUT); // take digital input from pin 11
+  pinMode(12, INPUT); // take digital input from pin 12
+  pinMode(13, INPUT); // take digital input from pin 13
+  pinMode(2, INPUT);  // take digital input from pin 2
+  pinMode(3, INPUT);  // take digital input from pin 3
+  pinMode(4, INPUT);  // take digital input from pin 4
+}
+
+//====================================================================================
+void loop() {
+  int TS1 = digitalRead(9);
+  int TS2 = digitalRead(10);
+  int TS3 = digitalRead(11);
+  
+  if(TS1 == 1 && TS2 == 0 && TS3 == 0){
+    LED_PATTERNS();
+  }
+
+  else if(TS1 == 0 && TS2 == 1 && TS3 == 0){
+   CREATE_PATTERNS();
+  }
+  
+  else if(TS1 == 0 && TS2 == 0 && TS3 == 1){
+    MIC_INPUT();
+  }
+
+  else if(TS1 == 0 && TS2 == 1 && TS3 == 1){
+    AUX_INPUT();
+  }
+}
+
+//==================================================================================== LED colourwheel
+void LED_COLOUR_TEST(){
+  
+ int colour_red = analogRead(A1);
+ int colour_green = analogRead(A2);
+ int colour_blue = analogRead(A3);
+
+ int red_light = map(colour_red, 0, 1023, 0, 100);
+ int green_light = map(colour_green, 0, 1023, 0, 150);
+ int blue_light = map(colour_blue, 0, 1023, 0, 150);
+ 
+  for(int i=0; i<NUM_LEDS; i++){
+    leds[i] = CRGB(red_light, green_light, blue_light);
+  } 
+    FastLED.show();
+}
+
+//==================================================================================== push buttons
+void push_button(){
+  int TS3 = digitalRead(3);
+  if(TS3 == 1){
+  for(int i=0; i<NUM_LEDS; i++){
+    leds[i] = CRGB(0, 20, 10);
+  } 
+    FastLED.show();
+    delay(50);
+    TS3 = digitalRead(3);
+  if(TS3 == 0){
+    for(int i=0; i<NUM_LEDS; i++){
+    leds[i] = CRGB(0, 0, 0);
+  }
+  FastLED.show();
+    num = old + 1;
+    if(num>7){
+      num = 0;
+    }
+   }
+  }
+
+  int TS4 = digitalRead(2);
+  if(TS4 == 1){
+    for(int i=0; i<NUM_LEDS; i++){
+    leds[i] = CRGB(30, 10, 0);
+  } 
+    FastLED.show();
+    delay(50);
+    TS4 = digitalRead(2);
+  if(TS4 == 0){
+    for(int i=0; i<NUM_LEDS; i++){
+    leds[i] = CRGB(0, 0, 0);
+  }
+  FastLED.show();
+    num = old - 1;
+    if(num < 0){
+      num = 7;
+    }
+   }
+  }
+}
+
+//==================================================================================== LED basic patterns
+void LED_PATTERNS(){
+
+  push_button();
+
+  switch(num)
+{
+  case 0:
+  old = num;
+  black();
+  break;
+  
+  case 1:
+  old = num;
+  red();
+  break;
+  
+  case 2:
+  old = num;
+  green();
+  break;
+  
+  case 3:
+  old = num;
+  blue();
+  break;
+  
+  case 4:
+  old = num;
+  pink();
+  break;
+
+  case 5:
+  old = num;
+  teal();
+  break;
+  
+  case 6:
+  old = num;
+  white();
+  break;
+
+  case 7:
+  old = num;
+  movinglight();
+  break;
+  }
+}
+
+//==================================================================================== LED patterns library
+
+void black(){
+  for(int i=0; i<NUM_LEDS; i++){
+    leds[i] = CRGB(0, 0, 0);
+  }
+  FastLED.show();
+}
+
+void red(){
+  for(int i=0; i<NUM_LEDS; i++){
+    leds[i] = CRGB(100, 0, 0);
+  }
+  FastLED.show();
+}
+
+void green(){
+  for(int i=0; i<NUM_LEDS; i++){
+    leds[i] = CRGB(0, 100, 0);
+  }
+  FastLED.show();
+}
+
+void blue(){
+  for(int i=0; i<NUM_LEDS; i++){
+    leds[i] = CRGB(0, 0, 100);
+  }
+  FastLED.show();
+}
+
+void pink(){
+  for(int i=0; i<NUM_LEDS; i++){
+    leds[i] = CRGB(50, 20, 60);
+  }
+  FastLED.show();
+}
+
+void teal(){
+  for(int i=0; i<NUM_LEDS; i++){
+    leds[i] = CRGB(0, 50, 60);
+  }
+  FastLED.show();
+}
+
+void white(){
+  for(int i=0; i<NUM_LEDS; i++){
+    leds[i] = CRGB(50, 50, 50);
+  }
+  FastLED.show();
+}
+
+void movinglight()
+{
+  int TS3 = digitalRead(3);
+  int TS4 = digitalRead(2);
+  if(TS3 == 1){
+    num + 1;
+    }
+    
+   else if(TS4 == 1){
+    num - 1;
+   }
+   
+   else{
+    for(int i=0; i< NUM_LEDS; i++){
+    leds[i] = CRGB(125, 75, 125);
+    FastLED.show();
+    fadeToBlackBy( leds, NUM_LEDS, 10);
+    FastLED.show();
+    }
+  }
+}
+
+//==================================================================================== CHOOSE LEDS
+
+int x = 0;
+int y = 0;
+int z = 0;
+int w = 0;
+int pat = 0;
+int p_pat = 0;
+int select[86];
+
+void CREATE_PATTERNS(){
+ 
+ int colour_red = analogRead(A1);
+ int colour_green = analogRead(A2);
+ int colour_blue = analogRead(A3);
+
+ int red = map(colour_red, 0, 1023, 0, 100);
+ int green = map(colour_green, 0, 1023, 0, 150);
+ int blue = map(colour_blue, 0, 1023, 0, 150);
+
+ int TS3 = digitalRead(3);
+ int TS4 = digitalRead(2);
+ int TS5 = digitalRead(4);
+ int TS6 = digitalRead(12);
+
+if(TS6 == 0){ 
+ 
+ if(TS3 == 1){
+  x++;
+  if(x == select[w]){
+    select[w] = 0;
+    w--;
+    if(w<0){
+      w=0;
+    }
+    z--;
+  }
+  if(x>86){
+    x=0;
+  }
+  delay(100);
+ }
+
+ if(TS4 == 1){
+  x--;
+  if(x == select[w]){
+    select[w] = 0;
+    w--;
+    if(w<0){
+      w=0;
+    }
+    z--;
+  }
+  if(x<0){
+    x=86;
+  }
+  delay(100);
+ }
+
+if(TS5 == 1){
+  delay(50);
+  TS5 = digitalRead(4);
+  if(TS5 == 0){
+   select[z] = x;
+   w = z;
+   z++;
+  }
+}
+ leds[y] = CRGB(0, 0, 0);
+ leds[x] = CRGB(red, green, blue);
+ leds[select[w]] = CRGB(100, 100, 100);
+ FastLED.show();
+ y = x;
+}
+
+else if(TS6 == 1){
+  
+  leds[x] = CRGB(0, 0, 0);
+  
+TS3 = digitalRead(3);
+  if(TS3 == 1){
+  for(int i=0; i<NUM_LEDS; i++){
+    leds[i] = CRGB(0, 20, 10);
+  } 
+    FastLED.show();
+    delay(500);
+    for(int i=0; i<NUM_LEDS; i++){
+    leds[i] = CRGB(0, 0, 0);
+  }
+  FastLED.show();
+    pat++;
+    if(pat>7){
+      pat = 0;
+    }
+   }
+
+TS4 = digitalRead(2);
+  if(TS4 == 1){
+    for(int i=0; i<NUM_LEDS; i++){
+    leds[i] = CRGB(30, 10, 0);
+  } 
+    FastLED.show();
+    delay(500);
+    for(int i=0; i<NUM_LEDS; i++){
+    leds[i] = CRGB(0, 0, 0);
+  }
+  FastLED.show();
+    pat--;
+    if(pat < 0){
+      pat = 7;
+    }
+   }
+
+  switch(pat)
+{
+  case 0:
+  p_pat = pat;
+  for(int v=0; v<=w; v++){
+    leds[0] = CRGB(red, green, blue);
+    leds[select[v]] = CRGB(red, green, blue);
+  FastLED.show();
+  }
+  
+  for(int v=0; v<=w; v++){
+    delay(40);
+    leds[select[v]] /= 2;
+    FastLED.show();
+    delay(40);
+    leds[select[v]] /= 2;
+    FastLED.show();
+    delay(40);
+    leds[select[v]] /= 2;
+    FastLED.show();
+    delay(40);
+    leds[select[v]] /= 2;
+    FastLED.show();
+  }
+
+  for(int v=0; v<=w; v++){
+    delay(40);
+    leds[select[v]] *= 2;
+    FastLED.show();
+    delay(40);
+    leds[select[v]] *= 2;
+    FastLED.show();
+    delay(40);
+    leds[select[v]] *= 2;
+    FastLED.show();
+    delay(40);
+    leds[select[v]] *= 2;
+    FastLED.show();
+  }
+  break;
+////////////////////////////////////////////////////////////////   
+  case 1:
+  p_pat = pat;
+  
+  for(int v=0; v<=w; v++){
+    leds[0] = CRGB(red, green, blue);
+    leds[select[v]] = CRGB(red, green, blue);
+  FastLED.show();
+  }
+  
+  for(int v=0; v<=w; v++){
+    delay(40);
+    leds[select[v]] /= 2;
+    FastLED.show();
+    delay(40);
+    leds[select[v]] /= 2;
+    FastLED.show();
+    delay(40);
+    leds[select[v]] /= 2;
+    FastLED.show();
+    delay(40);
+    leds[select[v]] /= 2;
+    FastLED.show();
+  }
+
+  for(int v=w; v>=0; v--){
+    delay(40);
+    leds[select[v]] *= 2;
+    FastLED.show();
+    delay(40);
+    leds[select[v]] *= 2;
+    FastLED.show();
+    delay(40);
+    leds[select[v]] *= 2;
+    FastLED.show();
+    delay(40);
+    leds[select[v]] *= 2;
+    FastLED.show();
+  }
+  break;
+////////////////////////////////////////////////////////////////  
+  case 2:
+  for(int brightness = 0; brightness < 140; brightness++){
+  leds[0] = CRGB (brightness, brightness, brightness);
+  FastLED.show();
+  delay(4);
+  }
+  for(int i=1, v=0; i<select[v]; i++){
+    leds[i] = CRGB(red/2, green/2, blue/2);
+    leds[i+1] = CRGB(red, green, blue);  
+    FastLED.show();
+    delay(5);
+    leds[i] = CRGB(0, 0, 0);
+    leds[i+1] = CRGB(0, 0, 0);  
+    FastLED.show();
+    delay(5);
+  }
+  for(int v=0; v<=w; v++){
+    TS3 = digitalRead(3);
+    TS4 = digitalRead(2);
+    if(TS3 == 1){
+      delay(50);
+      TS3 = digitalRead(3);
+      if(TS3 == 0);
+      pat = 2;
+    }
+    else if(TS4 == 1){
+      delay(50);
+      TS4 = digitalRead(2);
+      if(TS4 == 0);
+      pat = 2;
+    }
+    else{
+    for(int brightness = 0; brightness < 140; brightness++){
+    leds[select[v]] = CRGB (brightness, brightness, brightness);
+    delay(4);
+    FastLED.show();
+  }
+  for(int i=1; i<select[v]; i++){
+    leds[i] = CRGB(red/3, green/3, blue/3);
+    leds[i+1] = CRGB(red/2, green/2, blue/2);
+    leds[i+2] = CRGB(red, green, blue);    
+    FastLED.show();
+    delay(4);
+    leds[i] = CRGB(0, 0, 0);
+    leds[i+1] = CRGB(0, 0, 0); 
+    leds[i+2] = CRGB(0, 0, 0);   
+    FastLED.show();
+    delay(4);
+    }
+  }
+ }
+  p_pat = pat;
+  break;
+////////////////////////////////////////////////////////////////   
+  case 3:
+  for(int v=0; v<=w; v++){
+    leds[select[v]] = CRGB(100, 100, 0);
+  }
+  leds[0] = CRGB(100, 100, 0);
+  FastLED.show();
+  p_pat = pat;
+  break;
+////////////////////////////////////////////////////////////////   
+  case 4:
+  for(int v=0; v<=w; v++){
+    leds[select[v]] = CRGB(0, 100, 100);
+  }
+  leds[0] = CRGB(0, 100, 100);
+  FastLED.show();
+  p_pat = pat;
+  break;
+//////////////////////////////////////////////////////////////// 
+  case 5:
+  for(int v=0; v<=w; v++){
+    leds[select[v]] = CRGB(100, 0, 100);
+  }
+  leds[0] = CRGB(100, 0, 100);
+  FastLED.show();
+  p_pat = pat;
+  break;
+//////////////////////////////////////////////////////////////// 
+  case 6:
+  for(int v=0; v<=w; v++){
+    leds[select[v]] = CRGB(100, 100, 100);
+  }
+  leds[0] = CRGB(100, 100, 100);
+  FastLED.show();
+  p_pat = pat;
+  break;
+ ////////////////////////////////////////////////////////////////  
+  case 7:
+  p_pat = pat;
+  for(int v=0; v<=w; v++){
+    leds[select[v]] = CRGB(0, 0, 0);
+  }
+  leds[0] = CRGB(0, 0, 0);
+  FastLED.show();
+  break;
+//////////////////////////////////////////////////////////////// 
+  default:
+  //all leds off
+  break;
+    }
+  }
+}
+//==================================================================================== push button mic
+void push_button_mic(){
+  
+  int TS3 = digitalRead(3);
+  if(TS3 == 1){
+  for(int i=0; i<NUM_LEDS; i++){
+    leds[i] = CRGB(0, 20, 10);
+  } 
+    FastLED.show();
+    delay(50);
+    TS3 = digitalRead(3);
+  if(TS3 == 0){
+    for(int i=0; i<NUM_LEDS; i++){
+    leds[i] = CRGB(0, 0, 0);
+  }
+  FastLED.show();
+    n = o + 1;
+    if(n>4){
+      n = 0;
+    }
+   }
+  }
+
+  int TS4 = digitalRead(2);
+  if(TS4 == 1){
+    for(int i=0; i<NUM_LEDS; i++){
+    leds[i] = CRGB(30, 10, 0);
+  }
+    FastLED.show();
+    delay(50);
+    TS4 = digitalRead(2);
+  if(TS4 == 0){
+    for(int i=0; i<NUM_LEDS; i++){
+    leds[i] = CRGB(0, 0, 0);
+  }
+  FastLED.show();
+    n = o - 1;
+    if(n < 0){
+      n = 4;
+    }
+   }
+  }
+}
+
+//==================================================================================== MIC Input
+ 
+void MIC_INPUT(){
+
+  push_button_mic();
+ switch(n)
+{
+  case 0:
+  o=n;
+  basic_volume_sensor_mic();
+  break;
+
+  case 1:  
+  o=n;
+  basic_volume_sensor_tail_mic();
+  break;
+
+  case 2:  
+  o=n; 
+  opposite_volume_sensor_mic();
+  break;
+
+  case 3:  
+  o=n;
+  FHTDISPLAY_mic();
+  break;
+
+  case 4:  
+  o=n;
+  FHTDISPLAY_mic_colour();
+  break;
+  
+  default:
+  break;
+  }
+}
+
+//==================================================================================== mic_patterns
+void basic_volume_sensor_mic(){
+  
+int MIC_ANALOG = analogRead(A4);
+  int NEW_LEDS_LEVEL = map(MIC_ANALOG, 150, volume_mic, 0, NUM_LEDS);
+
+  if(NEW_LEDS_LEVEL > LEDS_LEVEL){
+    LEDS_LEVEL += UPDATE_LEDS;
+  }
+  else if(NEW_LEDS_LEVEL < LEDS_LEVEL){
+    if(millis() - lastrefreshtime >= REMOVE_LEDS){
+    lastrefreshtime += REMOVE_LEDS;
+    LEDS_LEVEL -= 1;
+    }
+  }
+  
+  if(LEDS_LEVEL < 1){
+   LEDS_LEVEL = 0; 
+  }
+  if(LEDS_LEVEL > NUM_LEDS){
+    LEDS_LEVEL = NUM_LEDS;
+  }
+
+  for(int i=0; i<LEDS_LEVEL; i++){
+    if(i < MIDDLE_LED){
+      leds[i] = CRGB(map(i, 0, MIDDLE_LED-1, 0, 128), 128, 0);
+    }
+    else{
+      leds[i] = CRGB(128, map(i, MIDDLE_LED, NUM_LEDS, 128, 0), 0);
+    }
+  }
+  for(int i=NUM_LEDS; i>=LEDS_LEVEL; i--){
+      leds[i].fadeToBlackBy( 8 );
+  }
+  FastLED.show();
+}
+
+//==================================================================================== 
+void opposite_volume_sensor_mic(){
+
+int MIC_ANALOG = analogRead(A4);
+  int NEW_LEDS_LEVEL = map(MIC_ANALOG, 150, volume_mic, NUM_LEDS, 0);
+
+  if(NEW_LEDS_LEVEL < LEDS_LEVEL){
+    LEDS_LEVEL -= UPDATE_LEDS;
+  }
+  else if(NEW_LEDS_LEVEL > LEDS_LEVEL){
+    if(millis() - lastrefreshtime >= REMOVE_LEDS){
+    lastrefreshtime -= REMOVE_LEDS;
+    LEDS_LEVEL += 1;
+    }
+  }
+  
+  if(LEDS_LEVEL < 1){
+   LEDS_LEVEL = 0; 
+  }
+  if(LEDS_LEVEL > NUM_LEDS){
+    LEDS_LEVEL = NUM_LEDS;
+  }
+
+  for(int i=NUM_LEDS; i>LEDS_LEVEL; i--){
+    if(i < MIDDLE_LED){
+      leds[i] = CRGB(map(i, 0, MIDDLE_LED-1, 0, 128), 128, 0);
+    }
+    else{
+      leds[i] = CRGB(128, map(i, MIDDLE_LED, NUM_LEDS, 128, 0), 0);
+    }
+  }
+  for(int i=0; i<=LEDS_LEVEL; i++){
+      leds[i].fadeToBlackBy( 8 );
+  }
+  FastLED.show();
+}
+
+//==================================================================================== 
+void basic_volume_sensor_tail_mic(){
+
+int MIC_ANALOG = analogRead(A4);
+  int NEW_LEDS_LEVEL = map(MIC_ANALOG, 150, volume_mic, 0, NUM_LEDS);
+
+  if(NEW_LEDS_LEVEL > LEDS_LEVEL){
+    LEDS_LEVEL += UPDATE_LEDS;
+  }
+  else if(NEW_LEDS_LEVEL < LEDS_LEVEL){
+    if(millis() - lastrefreshtime >= REMOVE_LEDS){
+    lastrefreshtime += REMOVE_LEDS;
+    LEDS_LEVEL -= 1;
+    }
+  }
+  
+  if(LEDS_LEVEL < 1){
+   LEDS_LEVEL = 0; 
+  }
+  if(LEDS_LEVEL > NUM_LEDS){
+    LEDS_LEVEL = NUM_LEDS;
+  }
+
+  for(int i=0; i<LEDS_LEVEL; i++){
+    if(i < MIDDLE_LED){
+      leds[i] = CRGB(map(i, 0, MIDDLE_LED-1, 0, 128), 128, 0);
+      leds[LEDS_LEVEL] = CRGB(0, 128, map(i, 0, MIDDLE_LED-1, 64, 128));
+    }
+    else{
+      leds[i] = CRGB(128, map(i, MIDDLE_LED, NUM_LEDS, 128, 0), 0);
+      leds[LEDS_LEVEL] = CRGB(map(i, MIDDLE_LED, NUM_LEDS, 0, 128), map(i, MIDDLE_LED, NUM_LEDS, 128, 0), 128);
+    }
+  }
+  for(int i=NUM_LEDS; i>=LEDS_LEVEL; i--){
+      leds[i].fadeToBlackBy( 8 );
+  }
+  FastLED.show();
+}
+
+//====================================================================================
+void FHTDISPLAY_mic(){
+  getFHT_mic();
+  fhtDisplay_mic();
+  FastLED.show();
+}
+
+//====================================================================================
+void getFHT_mic() {
+  
+  get_sound_mic();                                                // High speed sound sampling.
+  fht_window();                                               // Window the data for better frequency response.
+  fht_reorder();                                              // Reorder the data before doing the fht.
+  fht_run();                                                  // Process the data in the fht.
+  fht_mag_log();                                              // log values of magnitude are in decibels
+}
+
+//====================================================================================
+void get_sound_mic() {                                           
+
+cli();
+ for (int i = 0 ; i < 256 ; i+=2){
+  fht_input[i] = analogRead(A4);
+  fht_input[i+1] = 0;
+ }
+sei();
+} 
+
+//====================================================================================
+void fhtDisplay_mic() {
+  
+  #define micmult 10                                           // Bin values are very low, to let's crank 'em up.
+  #define noiseval 50                                          // Increase this to reduce sensitivity.
+  int low_LED = 15;
+  int middle_LED = 30;
+  int high_LED = 45;
+  for (int i = 0; i < NUM_LEDS; i++) {                          // Run through the LED array.
+    int tmp = map((micmult*qsuba(fht_log_out[(i/2)+2], noiseval)), 10, 20, 0, 20);       // Get the sample and subtract the 'quiet' normalized values, but don't go < 0.
+    leds[i].fadeToBlackBy( 64 );
+    if (i<tmp){                                                // Refresh an LED only when the intensity is low. By Andrew Tuline.
+      
+      if(i<low_LED){
+        leds[i] = CRGB(0, map(i, 0, low_LED-1, 0, 128), 128);
+      }
+      else if(i<middle_LED && i >=low_LED){
+        leds[i] = CRGB(0, 128, map(i, low_LED, middle_LED-1, 128, 0));
+      }
+      else if(i<high_LED && i >=middle_LED){
+        leds[i] = CRGB(map(i, middle_LED, high_LED-1, 0, 128), map(i, middle_LED, high_LED-1, 128, 0), 0);
+      }
+      else if(i>=high_LED){
+        leds[i] = CRGB(map(i, high_LED, 60, 128, 64), 0, map(i, high_LED, 60, 0, 128));
+      }
+    else{
+      leds[i].fadeToBlackBy( 64 );
+    }
+  }
+ }
+}
+
+//====================================================================================
+void FHTDISPLAY_mic_colour(){
+  getFHT_mic();
+  fhtDisplay_mic_volume();
+  FastLED.show();
+}
+
+//====================================================================================
+void fhtDisplay_mic_volume() {
+  
+  #define micmult 10                                           // Bin values are very low, to let's crank 'em up.
+  #define noiseval 50                                          // Increase this to reduce sensitivity.
+  int LED_colour = analogRead(A4);
+  int low_LED = 15;
+  int middle_LED = 30;
+  int high_LED = 45;
+  for (int i = 0; i < NUM_LEDS; i++) {                          // Run through the LED array.
+    int tmp = map((micmult*qsuba(fht_log_out[(i/2)+2], noiseval)), 10, 20, 0, 20);       // Get the sample and subtract the 'quiet' normalized values, but don't go < 0.
+    if(i<tmp){
+      leds[i] = CRGB(map(LED_colour, 0, 500, 0, 128), 0, 128);
+      leds[i].fadeToBlackBy(64);
+    }
+    else{
+      leds[i].fadeToBlackBy(64);
+    }
+ }
+}
+
+//==================================================================================== Frequency Visualizer
+
+void AUX_INPUT(){
+
+  push_button_mic();
+ switch(n)
+{
+  case 0:
+  o=n;
+  basic_volume_sensor();
+  break;
+
+  case 1:  
+  o=n;
+  basic_volume_sensor_tail();
+  break;
+
+  case 2:  
+  o=n; 
+  opposite_volume_sensor();
+  break;
+
+  case 3:  
+  o=n;
+  FHTDISPLAY();
+  break;
+  
+  default:
+  break;
+  }
+}
+
+//====================================================================================
+void FHTDISPLAY(){
+  getFHT();
+  fhtDisplay();
+  FastLED.show();
+}
+
+//====================================================================================
+void getFHT() {
+  
+  get_sound();                                                // High speed sound sampling.
+  fht_window();                                               // Window the data for better frequency response.
+  fht_reorder();                                              // Reorder the data before doing the fht.
+  fht_run();                                                  // Process the data in the fht.
+  fht_mag_log();                                              // log values of magnitude are in decibels
+}
+
+//====================================================================================
+void get_sound() {                                           
+
+cli();
+ for (int i = 0 ; i < 256 ; i+=2){
+  fht_input[i] = analogRead(A0);
+  fht_input[i+1] = 0;
+ }
+sei();
+} 
+
+//====================================================================================
+void fhtDisplay() {
+  
+  #define micmult 100                                           // Bin values are very low, to let's crank 'em up.
+  #define noiseval 30                                          // Increase this to reduce sensitivity.
+  int low_LED = 15;
+  int middle_LED = 30;
+  int high_LED = 45;
+  for (int i = 0; i < NUM_LEDS; i++) {                          // Run through the LED array.
+    int tmp = map((micmult*qsuba(fht_log_out[(i/2)+2], noiseval)), 10, 20, 0, 20);       // Get the sample and subtract the 'quiet' normalized values, but don't go < 0.
+    leds[i].fadeToBlackBy( 64 );
+    if (i<tmp){                                                // Refresh an LED only when the intensity is low. By Andrew Tuline.
+      
+      if(i<low_LED){
+        leds[i] = CRGB(0, map(i, 0, low_LED-1, 0, 128), 128);
+      }
+      else if(i<middle_LED && i >=low_LED){
+        leds[i] = CRGB(0, 128, map(i, low_LED, middle_LED-1, 128, 0));
+      }
+      else if(i<high_LED && i >=middle_LED){
+        leds[i] = CRGB(map(i, middle_LED, high_LED-1, 0, 128), map(i, middle_LED, high_LED-1, 128, 0), 0);
+      }
+      else if(i>=high_LED){
+        leds[i] = CRGB(map(i, high_LED, 60, 128, 64), 0, map(i, high_LED, 60, 0, 128));
+      }
+    else{
+      leds[i].fadeToBlackBy( 64 );
+    }
+  }
+ }
+}
+
+//==================================================================================== mic_patterns
+void basic_volume_sensor(){
+  
+int MIC_ANALOG = analogRead(A0);
+  int NEW_LEDS_LEVEL = map(MIC_ANALOG, 0, volume, 0, NUM_LEDS);
+
+  if(NEW_LEDS_LEVEL > LEDS_LEVEL){
+    LEDS_LEVEL += UPDATE_LEDS;
+  }
+  else if(NEW_LEDS_LEVEL < LEDS_LEVEL){
+    if(millis() - lastrefreshtime >= REMOVE_LEDS){
+    lastrefreshtime += REMOVE_LEDS;
+    LEDS_LEVEL -= 1;
+    }
+  }
+  
+  if(LEDS_LEVEL < 1){
+   LEDS_LEVEL = 0; 
+  }
+  if(LEDS_LEVEL > NUM_LEDS){
+    LEDS_LEVEL = NUM_LEDS;
+  }
+
+  for(int i=0; i<LEDS_LEVEL; i++){
+    if(i < MIDDLE_LED){
+      leds[i] = CRGB(map(i, 0, MIDDLE_LED-1, 0, 128), 128, 0);
+    }
+    else{
+      leds[i] = CRGB(128, map(i, MIDDLE_LED, NUM_LEDS, 128, 0), 0);
+    }
+  }
+  for(int i=NUM_LEDS; i>=LEDS_LEVEL; i--){
+      leds[i].fadeToBlackBy( 8 );
+  }
+  FastLED.show();
+}
+
+//==================================================================================== 
+void opposite_volume_sensor(){
+
+int MIC_ANALOG = analogRead(A0);
+  int NEW_LEDS_LEVEL = map(MIC_ANALOG, 0, volume, NUM_LEDS, 0);
+
+  if(NEW_LEDS_LEVEL < LEDS_LEVEL){
+    LEDS_LEVEL -= UPDATE_LEDS;
+  }
+  else if(NEW_LEDS_LEVEL > LEDS_LEVEL){
+    if(millis() - lastrefreshtime >= REMOVE_LEDS){
+    lastrefreshtime -= REMOVE_LEDS;
+    LEDS_LEVEL += 1;
+    }
+  }
+  
+  if(LEDS_LEVEL < 1){
+   LEDS_LEVEL = 0; 
+  }
+  if(LEDS_LEVEL > NUM_LEDS){
+    LEDS_LEVEL = NUM_LEDS;
+  }
+
+  for(int i=NUM_LEDS; i>LEDS_LEVEL; i--){
+    if(i < MIDDLE_LED){
+      leds[i] = CRGB(map(i, 0, MIDDLE_LED-1, 0, 128), 128, 0);
+    }
+    else{
+      leds[i] = CRGB(128, map(i, MIDDLE_LED, NUM_LEDS, 128, 0), 0);
+    }
+  }
+  for(int i=0; i<=LEDS_LEVEL; i++){
+      leds[i].fadeToBlackBy( 8 );
+  }
+  FastLED.show();
+}
+
+//==================================================================================== 
+void basic_volume_sensor_tail(){
+
+int MIC_ANALOG = analogRead(A0);
+  int NEW_LEDS_LEVEL = map(MIC_ANALOG, 0, volume, 0, NUM_LEDS);
+
+  if(NEW_LEDS_LEVEL > LEDS_LEVEL){
+    LEDS_LEVEL += UPDATE_LEDS;
+  }
+  else if(NEW_LEDS_LEVEL < LEDS_LEVEL){
+    if(millis() - lastrefreshtime >= REMOVE_LEDS){
+    lastrefreshtime += REMOVE_LEDS;
+    LEDS_LEVEL -= 1;
+    }
+  }
+  
+  if(LEDS_LEVEL < 1){
+   LEDS_LEVEL = 0; 
+  }
+  if(LEDS_LEVEL > NUM_LEDS){
+    LEDS_LEVEL = NUM_LEDS;
+  }
+
+  for(int i=0; i<LEDS_LEVEL; i++){
+    if(i < MIDDLE_LED){
+      leds[i] = CRGB(map(i, 0, MIDDLE_LED-1, 0, 128), 128, 0);
+      leds[LEDS_LEVEL] = CRGB(0, 128, map(i, 0, MIDDLE_LED-1, 64, 128));
+    }
+    else{
+      leds[i] = CRGB(128, map(i, MIDDLE_LED, NUM_LEDS, 128, 0), 0);
+      leds[LEDS_LEVEL] = CRGB(map(i, MIDDLE_LED, NUM_LEDS, 0, 128), map(i, MIDDLE_LED, NUM_LEDS, 128, 0), 128);
+    }
+  }
+  for(int i=NUM_LEDS; i>=LEDS_LEVEL; i--){
+      leds[i].fadeToBlackBy( 8 );
+  }
+  FastLED.show();
+}

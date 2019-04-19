@@ -1,0 +1,397 @@
+//-- Libraries Included --------------------------------------------------------------
+  #include <FastLED.h>
+  #include <ESP8266WiFi.h>
+  #include <WiFiClient.h>
+  #include <ESP8266WebServer.h>
+  
+//------------------------------------------------------------------------------------
+// Defining I/O Pins
+//------------------------------------------------------------------------------------
+  #define     LED_STRIP      D1           // WIFI Module LED
+  
+//------------------------------------------------------------------------------------
+// LED Variables
+//------------------------------------------------------------------------------------
+  #define NUM_LEDS 15                     // How long the LED strip is
+  CRGB leds[NUM_LEDS];                    
+  
+//------------------------------------------------------------------------------------
+// WIFI Authentication Variables
+//------------------------------------------------------------------------------------
+  #ifndef LEDssid
+  #define LEDssid          "LED_WiFi"           // SERVER WIFI NAME
+  #define LEDpassword      "Lettherebelight"    // SERVER PASSWORD
+  #endif
+  const char *ssid         = LEDssid;              
+  const char *password     = LEDpassword;          
+//------------------------------------------------------------------------------------
+  ESP8266WebServer  LEDserver(80);      // THE SERVER AND THE PORT NUMBER
+  
+//====================================================================================
+
+  void setup()
+  {
+    // Setting The Serial Port ----------------------------------------------
+    Serial.begin(115200);           // Computer Communication
+    
+    // Setting The Mode Of Pins ---------------------------------------------
+    FastLED.addLeds<WS2812, LED_STRIP, GRB>(leds,NUM_LEDS); // LED STRIP INITIALIZATION
+    
+    // Print Message Of I/O Setting Progress --------------------------------
+    Serial.println();
+    Serial.println("I/O Pins Modes Set .... Done");
+
+    // Setting Up an Access Point -------------------------------------------
+    WiFi.softAP(ssid, password);      // Initialize a "software router"
+    IPAddress myIP = WiFi.softAPIP(); // Default IP address of "software router"
+    Serial.print("AP IP address: ");
+    Serial.println(myIP);
+    LEDserver.on("/data/", handleRoot);
+    LEDserver.begin();
+    Serial.println("HTTP server started");
+  }
+  
+//====================================================================================  
+
+  void loop()
+  {
+    LEDserver.handleClient();
+  }
+  
+//====================================================================================
+
+void handleRoot() {
+  
+  // If "sensor_reading" received -------------------------------------------
+    if(LEDserver.hasArg("sensor_reading")){
+      int cmd = LEDserver.arg("sensor_reading").toInt(); //convert char variable in "sensor_reading" to int
+      
+  // Switch case function based on variable reading -------------------------
+         Serial.println(cmd);
+         switch(cmd) {
+           case 0:
+                LEDserver.on("/choice/", handleColours);
+                Serial.println("LED_COLOURS");
+                break;
+           case 1:
+                LEDserver.on("/choice/", handlePatterns);
+                Serial.println("LED_PATTERNS");
+                break;
+           case 2:
+                LEDserver.on("/choice/", handleMusicVisualizer_D);
+                Serial.println("Music Visualizer Digital");
+                break;
+            default:
+                LEDserver.on("/choice/", handleMusicVisualizer_A);
+                Serial.println("Music Visualizer Analog");
+                break;
+          }
+   // convert variable back to char and send data received ------------------
+      char readingtoPrint_cmd[5];
+      itoa(cmd, readingtoPrint_cmd, 10);
+      LEDserver.send(10, "text/html", "<h1>Data received</h1>");
+    }
+  }
+
+//====================================================================================
+
+void handleColours(){
+  if(LEDserver.hasArg("choice_reading")){
+      int choice = LEDserver.arg("choice_reading").toInt();
+      Serial.println(choice);
+      switch(choice) {
+           case 0:
+                for(int i=0; i<NUM_LEDS; i++){
+                  leds[i] = CRGB(0, 0, 0);
+               }
+                FastLED.show();
+                Serial.println("LEDs_Colours");
+                break;
+           case 1:
+                for(int i=0; i<NUM_LEDS; i++){
+                  leds[i] = CRGB(0, 100, 0);
+               }
+                FastLED.show();
+                Serial.println("LEDs_Green");
+                break;
+           case 2:
+               for(int i=0; i<NUM_LEDS; i++){
+                 leds[i] = CRGB(0, 0, 100);
+               }
+                FastLED.show();
+                Serial.println("LEDs_Blue");
+                break;
+            default:
+                for(int i=0; i<NUM_LEDS; i++){
+                  leds[i] = CRGB(80, 80, 80);
+               }
+                FastLED.show();
+                Serial.println("LEDs_White");
+                break;
+      }
+      char readingtoPrint_choice[5];
+      itoa(choice, readingtoPrint_choice, 10);
+      LEDserver.send(10, "text/html", "<h1>Data received</h1>");
+  }
+}
+
+//====================================================================================
+
+void handlePatterns(){
+  if(LEDserver.hasArg("choice_reading")){
+      int choice = LEDserver.arg("choice_reading").toInt();
+      Serial.println(choice);
+      switch(choice) {
+           case 0:
+                for(int i=0; i<NUM_LEDS; i++){
+                  leds[i] = CRGB(0, 0, 0);
+               }
+                FastLED.show();
+                Serial.println("LEDs_Patterns");
+                break;
+           case 1:
+                FastLED.show();
+                sinelon1();
+                Serial.println("LEDs_sinewave");
+                break;
+           case 2:
+                FastLED.show();
+                fireworks();
+                Serial.println("LEDs Blue");
+                break;
+            default:
+                FastLED.show();
+                sinelon2();
+                Serial.println("LEDs White");
+                break;
+      }
+      char readingtoPrint_choice[5];
+      itoa(choice, readingtoPrint_choice, 10);
+      LEDserver.send(10, "text/html", "<h1>Data received</h1>");
+  }
+}
+
+//====================================================================================
+
+void handleMusicVisualizer_D()
+{
+  if(LEDserver.hasArg("choice_reading")){
+      int choice = LEDserver.arg("choice_reading").toInt();
+
+      Serial.println(choice);
+
+      switch(choice) {
+
+           case 0:
+               for(int i=0; i<NUM_LEDS; i++){
+                 leds[i] = CRGB(0, 0, 0);
+               }
+                FastLED.show();
+                Serial.println("Music Visualizer");
+                break;
+           case 1:
+                LEDserver.on("/Dout_1/", Music_Pattern_D_1);
+                Serial.println("LEDs Random");
+                break;
+           case 2:
+                LEDserver.on("/Dout_2/", Music_Pattern_D_2);
+                Serial.println("LEDs Random streaks");
+                break;
+            default:
+               for(int i=0; i<NUM_LEDS; i++){
+                 leds[i] = CRGB(0, 100, 0);
+               }
+                FastLED.show();
+                Serial.println("Music Visualizer");
+                break;
+      }
+      char readingtoPrint_choice[5];
+      itoa(choice, readingtoPrint_choice, 10);
+      LEDserver.send(10, "text/html", "<h1>Data received</h1>");
+  }
+}
+
+//====================================================================================
+void handleMusicVisualizer_A()
+{
+  if(LEDserver.hasArg("choice_reading")){
+      int choice = LEDserver.arg("choice_reading").toInt();
+
+      Serial.println(choice);
+
+      switch(choice) {
+
+           case 0:
+               for(int i=0; i<NUM_LEDS; i++){
+                 leds[i] = CRGB(0, 0, 0);
+               }
+                FastLED.show();
+                Serial.println("Music Visualizer Analog");
+                break;
+           case 1:
+                LEDserver.on("/Aout_1/", Music_Pattern_A_1);
+                Serial.println("LEDs Random");
+                break;
+           case 2:
+                LEDserver.on("/Aout_2/", Music_Pattern_A_2);
+                Serial.println("LEDs Random streaks");
+                break;
+            default:
+               for(int i=0; i<NUM_LEDS; i++){
+                 leds[i] = CRGB(0, 0, 100);
+               }
+                FastLED.show();
+                Serial.println("Music Visualizer");
+                break;
+      }
+      char readingtoPrint_choice[5];
+      itoa(choice, readingtoPrint_choice, 10);
+      LEDserver.send(10, "text/html", "<h1>Data received</h1>");
+  }
+}
+
+//====================================================================================
+
+void Music_Pattern_D_1()
+{
+  if(LEDserver.hasArg("Dout_reading_1")){
+      int Dout1 = LEDserver.arg("Dout_reading_1").toInt();
+  
+  if(Dout1 == 1){
+    fadeToBlackBy( leds, NUM_LEDS, 40);
+    int pos = random16(NUM_LEDS);
+    leds[pos] += CRGB( 30, 100, 100);
+      FastLED.show();
+    }
+    delay(5);
+   if(Dout1 == 0){
+    fadeToBlackBy( leds, NUM_LEDS, 40);
+     FastLED.show();
+   }
+   char readingtoPrint_Dout1[5];
+      itoa(Dout1, readingtoPrint_Dout1, 10);
+      LEDserver.send(10, "text/html", "<h1>Data received</h1>");
+ }
+}
+
+//====================================================================================
+
+void Music_Pattern_D_2()
+{
+  if(LEDserver.hasArg("Dout_reading_2")){
+      int Dout2 = LEDserver.arg("Dout_reading_2").toInt();
+  
+  if(Dout2 == 1){
+  fadeToBlackBy( leds, NUM_LEDS, 20);
+  int current_pos = random16(NUM_LEDS);
+  int high_pos = current_pos+4;
+  int low_pos = current_pos-4;
+  for(int i=current_pos, j=current_pos; (i<high_pos) && (j>low_pos); i++, j--){
+    leds[i] = CRGB(30, 30, 100);
+    leds[j] = CRGB(30, 30, 100);
+    FastLED.show();
+    delay(25);
+    fadeToBlackBy( leds, NUM_LEDS, 90);
+    FastLED.show();
+    delay(25);
+    }
+  }
+ if(Dout2 == 0){
+    fadeToBlackBy( leds, NUM_LEDS, 90);
+    FastLED.show();
+    delay(45);
+  }
+  char readingtoPrint_Dout2[5];
+      itoa(Dout2, readingtoPrint_Dout2, 10);
+      LEDserver.send(10, "text/html", "<h1>Data received</h1>");
+ }
+}
+
+//====================================================================================
+
+void Music_Pattern_A_1()
+{
+  if(LEDserver.hasArg("Aout_reading_1")){
+      int Aout1 = LEDserver.arg("Aout_reading_1").toInt();
+  
+  if(Aout1 > 200){
+    fadeToBlackBy( leds, NUM_LEDS, 40);
+    int pos = random16(NUM_LEDS);
+    leds[pos] += CRGB( 100, 30, 100);
+      FastLED.show();
+    }
+    delay(5);
+   if(Aout1 <= 200){
+    fadeToBlackBy( leds, NUM_LEDS, 40);
+     FastLED.show();
+   }
+   char readingtoPrint_Aout1[5];
+      itoa(Aout1, readingtoPrint_Aout1, 10);
+      LEDserver.send(10, "text/html", "<h1>Data received</h1>");
+ }
+}
+
+//====================================================================================
+
+void Music_Pattern_A_2()
+{
+  if(LEDserver.hasArg("Aout_reading_2")){
+      int Aout2 = LEDserver.arg("Aout_reading_2").toInt();
+  
+  if(Aout2 > 200){
+  fadeToBlackBy( leds, NUM_LEDS, 20);
+  int current_pos = random16(NUM_LEDS);
+  int high_pos = current_pos+4;
+  int low_pos = current_pos-4;
+  for(int i=current_pos, j=current_pos; (i<high_pos) && (j>low_pos); i++, j--){
+    leds[i] = CRGB(100, 100, 20);
+    leds[j] = CRGB(100, 100, 20);
+    FastLED.show();
+    delay(25);
+    fadeToBlackBy( leds, NUM_LEDS, 90);
+    FastLED.show();
+    delay(25);
+    }
+  }
+  else{
+    fadeToBlackBy( leds, NUM_LEDS, 90);
+    FastLED.show();
+    delay(45);
+  }
+  char readingtoPrint_Aout2[5];
+      itoa(Aout2, readingtoPrint_Aout2, 10);
+      LEDserver.send(10, "text/html", "<h1>Data received</h1>");
+ }
+}
+
+//====================================================================================
+
+void sinelon1()
+{
+  // a colored dot sweeping back and forth, with fading trails
+  fadeToBlackBy( leds, NUM_LEDS, 20);
+  int pos = beatsin16( 13, 0, NUM_LEDS-1 );
+  leds[pos] += CRGB( 80, 80, 80);
+}
+
+//====================================================================================
+
+void sinelon2()
+{
+  fadeToBlackBy( leds, NUM_LEDS, 10);
+  int pos1 = beatsin16(16, 0, NUM_LEDS/2);
+  leds[pos1] += CRGB( 20, 80, 100);
+  int pos2 = beatsin16(16, 0, NUM_LEDS);
+  leds[pos2] += CRGB( 20, 80, 100);
+}
+
+//====================================================================================
+
+void fireworks() 
+{
+  fadeToBlackBy( leds, NUM_LEDS, 10);
+  int pos = random16(NUM_LEDS);
+  leds[pos] += CHSV( random8(64), 200, 180);
+}
+
+//====================================================================================
